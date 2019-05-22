@@ -109,13 +109,18 @@ func getIssues(username, password string) issueResultStruct {
 func (mw *mainWindow) update(w *nucular.Window) {
 	// General event handler
 	for _, e := range w.Input().Keyboard.Keys {
+		if e.Modifiers.String() != key.ModMeta.String() {
+			// Only process keys with meta modifier
+			continue
+		}
 		switch e.Rune {
 		case 'q':
-			if e.Modifiers.String() == key.ModMeta.String() {
-				w.Close()
-				os.Exit(0)
-				return
-			}
+			w.Close()
+			os.Exit(0)
+			return
+		case 's':
+			mw.conf.Write()
+			fmt.Println("Config saved to disk")
 		}
 	}
 
@@ -132,8 +137,6 @@ func (mw *mainWindow) update(w *nucular.Window) {
 
 	// Get Issues Button
 	if w.ButtonText("Get Issues") {
-		mw.conf.Write()
-
 		mw.resultEdit.Buffer = []rune("")
 		results := getIssues(mw.conf.Username, mw.conf.Password)
 
