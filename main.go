@@ -32,48 +32,68 @@ type mainWindow struct {
 	epicEdit     nucular.TextEditor
 	assigneeEdit nucular.TextEditor
 	statusEdit   nucular.TextEditor
-	resultEdit   nucular.TextEditor
+
+	cards []card
 }
 
 func createMainWindow(conf *config.Config) *mainWindow {
 	mw := mainWindow{}
 	mw.conf = conf
 
+	mw.usernameEdit.Flags = nucular.EditSelectable
 	mw.usernameEdit.Buffer = []rune(conf.Username)
 
 	mw.passwordEdit.Flags = nucular.EditField
 	mw.passwordEdit.PasswordChar = '*'
 	mw.passwordEdit.Buffer = []rune(conf.Password)
 
+	mw.epicEdit.Flags = nucular.EditSelectable
 	mw.epicEdit.Buffer = []rune(conf.Epic)
 
+	mw.assigneeEdit.Flags = nucular.EditSelectable
 	mw.assigneeEdit.Buffer = []rune(conf.Assignee)
 
+	mw.statusEdit.Flags = nucular.EditSelectable
 	mw.statusEdit.Buffer = []rune(conf.Status)
 
-	mw.resultEdit.Flags = nucular.EditReadOnly | nucular.EditMultiline | nucular.EditSelectable
+	// mw.resultEdit.Flags = nucular.EditReadOnly | nucular.EditMultiline | nucular.EditSelectable
 
 	return &mw
 }
 
+type card struct {
+	ID     string `json:"id"`
+	Key    string `json:"key"`
+	Self   string `json:"self"`
+	Fields struct {
+		Summary string `json:"summary"`
+		Epic    string `json:"customfield_10009"`
+		Status  struct {
+			Name string `json:"name"`
+		} `json:"status"`
+		Creator struct {
+			Name        string `json:"name"`
+			DisplayName string `json:"displayName"`
+		} `json:"creator"`
+		Reporter struct {
+			Name        string `json:"name"`
+			DisplayName string `json:"displayName"`
+		} `json:"reporter"`
+		Assignee struct {
+			Name        string `json:"name"`
+			DisplayName string `json:"displayName"`
+		} `json:"assignee"`
+		IssueLinks []struct {
+			ID string `json:"id"`
+		} `json:"issuelinks"`
+	} `json:"fields"`
+}
+
 type issueResultStruct struct {
-	StartAt    int `json:"startAt"`
-	MaxResults int `json:"maxResults"`
-	Total      int `json:"total"`
-	Issues     []struct {
-		ID     string `json:"id"`
-		Key    string `json:"key"`
-		Self   string `json:"self"`
-		Fields struct {
-			Status struct {
-				Name string `json:"name"`
-			} `json:"status"`
-			Summary    string `json:"summary"`
-			IssueLinks []struct {
-				ID string `json:"id"`
-			} `json:"issuelinks"`
-		} `json:"fields"`
-	} `json:"issues"`
+	StartAt    int    `json:"startAt"`
+	MaxResults int    `json:"maxResults"`
+	Total      int    `json:"total"`
+	Issues     []card `json:"issues"`
 }
 
 func getIssues(conf *config.Config) issueResultStruct {
@@ -181,23 +201,41 @@ func (mw *mainWindow) update(w *nucular.Window) {
 
 	// Search Button
 	if w.ButtonText("Search") {
-		mw.resultEdit.Buffer = []rune("")
 		results := getIssues(mw.conf)
-		for _, issue := range results.Issues {
-			mw.resultEdit.Buffer = append(
-				mw.resultEdit.Buffer,
-				[]rune(issue.Self)...,
-			)
-			mw.resultEdit.Buffer = append(
-				mw.resultEdit.Buffer,
-				'\n',
-			)
-		}
+		mw.cards = results.Issues
+		// for _, issue := range results.Issues {
+		// 	mw.resultEdit.Buffer = append(
+		// 		mw.resultEdit.Buffer,
+		// 		[]rune(issue.Self)...,
+		// 	)
+		// 	mw.resultEdit.Buffer = append(
+		// 		mw.resultEdit.Buffer,
+		// 		'\n',
+		// 	)
+		// }
 	}
 
 	// Results Display
 	w.Label("Results", "LC")
-	w.Row(200).Dynamic(1)
-	mw.resultEdit.Edit(w)
+	for _, card := range mw.cards {
+		if w.TreePush(nucular.TreeTab, fmt.Sprintf("%s - %s", card.Key, card.Fields.Summary), false) {
+			w.Row(25).Dynamic(2)
+			w.Label("Status", "LC")
+			w.Label(card.Fields.Status.Name, "LC")
 
+			w.Label("Epic", "LC")
+			w.Label(card.Fields.Epic, "LC")
+
+			w.Label("Assignee", "LC")
+			w.Label(card.Fields.Assignee.DisplayName, "LC")
+
+			w.Label("Reporter", "LC")
+			w.Label(card.Fields.Reporter.DisplayName, "LC")
+
+			w.Label("Creator", "LC")
+			w.Label(card.Fields.Creator.DisplayName, "LC")
+
+			w.TreePop()
+		}
+	}
 }
