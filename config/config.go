@@ -11,6 +11,9 @@ import (
 type Config struct {
 	Username string `yaml:"username"`
 	Password string `yaml:"password"`
+	Epic     string `yaml:"epic"`
+	Assignee string `yaml:"assignee"`
+	Status   string `yaml:"status"`
 }
 
 // Read the configuration from disk

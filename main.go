@@ -29,6 +29,9 @@ type mainWindow struct {
 	conf         *config.Config
 	usernameEdit nucular.TextEditor
 	passwordEdit nucular.TextEditor
+	epicEdit     nucular.TextEditor
+	assigneeEdit nucular.TextEditor
+	statusEdit   nucular.TextEditor
 	resultEdit   nucular.TextEditor
 }
 
@@ -41,6 +44,12 @@ func createMainWindow(conf *config.Config) *mainWindow {
 	mw.passwordEdit.Flags = nucular.EditField
 	mw.passwordEdit.PasswordChar = '*'
 	mw.passwordEdit.Buffer = []rune(conf.Password)
+
+	mw.epicEdit.Buffer = []rune(conf.Epic)
+
+	mw.assigneeEdit.Buffer = []rune(conf.Assignee)
+
+	mw.statusEdit.Buffer = []rune(conf.Status)
 
 	mw.resultEdit.Flags = nucular.EditReadOnly | nucular.EditMultiline | nucular.EditSelectable
 
@@ -67,9 +76,31 @@ type issueResultStruct struct {
 	} `json:"issues"`
 }
 
-func getIssues(username, password string) issueResultStruct {
+func getIssues(conf *config.Config) issueResultStruct {
 	client := http.Client{
 		Timeout: time.Duration(time.Second * 10),
+	}
+
+	// Build jql
+	jql := ""
+	if len(conf.Epic) > 0 {
+		jql = jql + "\"epic link\"=\"" + conf.Epic + "\""
+	}
+	if len(conf.Assignee) > 0 {
+		if len(jql) > 0 {
+			jql = jql + " AND "
+		}
+		jql = jql + "\"assignee\"=\"" + conf.Assignee + "\""
+	}
+	if len(conf.Status) > 0 {
+		if len(jql) > 0 {
+			jql = jql + " AND "
+		}
+		jql = jql + "\"status\"=\"" + conf.Status + "\""
+	}
+	if len(jql) == 0 {
+		// Require that some filters be set
+		return issueResultStruct{}
 	}
 
 	req, err := http.NewRequest("GET", "https://crosschx.atlassian.net/rest/api/3/search", nil)
@@ -78,9 +109,9 @@ func getIssues(username, password string) issueResultStruct {
 		return issueResultStruct{}
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.SetBasicAuth(username, password)
+	req.SetBasicAuth(conf.Username, conf.Password)
 	params := req.URL.Query()
-	params.Add("jql", "\"epic link\"=\"Automation Triggers POC\"")
+	params.Add("jql", jql)
 	req.URL.RawQuery = params.Encode()
 
 	fmt.Println(req.URL.RequestURI())
@@ -100,8 +131,6 @@ func getIssues(username, password string) issueResultStruct {
 
 	var results = issueResultStruct{}
 	json.Unmarshal(body, &results)
-
-	fmt.Printf("Results: %+v\n", results)
 
 	return results
 }
@@ -131,15 +160,29 @@ func (mw *mainWindow) update(w *nucular.Window) {
 	mw.conf.Username = string(mw.usernameEdit.Buffer)
 
 	// Password Input
-	w.Label("API Token", "LC")
+	w.Label("Password", "LC")
 	mw.passwordEdit.Edit(w)
 	mw.conf.Password = string(mw.passwordEdit.Buffer)
 
-	// Get Issues Button
-	if w.ButtonText("Get Issues") {
-		mw.resultEdit.Buffer = []rune("")
-		results := getIssues(mw.conf.Username, mw.conf.Password)
+	// Epic Input
+	w.Label("Epic", "LC")
+	mw.epicEdit.Edit(w)
+	mw.conf.Epic = string(mw.epicEdit.Buffer)
 
+	// Assignee Input
+	w.Label("Assignee", "LC")
+	mw.assigneeEdit.Edit(w)
+	mw.conf.Assignee = string(mw.assigneeEdit.Buffer)
+
+	// Status Input
+	w.Label("Status", "LC")
+	mw.statusEdit.Edit(w)
+	mw.conf.Status = string(mw.statusEdit.Buffer)
+
+	// Search Button
+	if w.ButtonText("Search") {
+		mw.resultEdit.Buffer = []rune("")
+		results := getIssues(mw.conf)
 		for _, issue := range results.Issues {
 			mw.resultEdit.Buffer = append(
 				mw.resultEdit.Buffer,
