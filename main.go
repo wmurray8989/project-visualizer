@@ -11,27 +11,36 @@ import (
 
 	"github.com/aarzilli/nucular"
 	"github.com/aarzilli/nucular/style"
+	"github.com/wmurray8989/project-visualizer/config"
 	"golang.org/x/mobile/event/key"
 )
 
 func main() {
-	mw := createMainWindow()
+	// Read configuration from disk
+	conf := config.Read()
+
+	mw := createMainWindow(&conf)
 	wnd := nucular.NewMasterWindow(0, "Project Visualizer", mw.update)
 	wnd.SetStyle(style.FromTheme(style.DarkTheme, 2.0))
 	wnd.Main()
 }
 
 type mainWindow struct {
+	conf         *config.Config
 	usernameEdit nucular.TextEditor
 	passwordEdit nucular.TextEditor
 	resultEdit   nucular.TextEditor
 }
 
-func createMainWindow() *mainWindow {
+func createMainWindow(conf *config.Config) *mainWindow {
 	mw := mainWindow{}
+	mw.conf = conf
+
+	mw.usernameEdit.Buffer = []rune(conf.Username)
 
 	mw.passwordEdit.Flags = nucular.EditField
 	mw.passwordEdit.PasswordChar = '*'
+	mw.passwordEdit.Buffer = []rune(conf.Password)
 
 	mw.resultEdit.Flags = nucular.EditReadOnly | nucular.EditMultiline | nucular.EditSelectable
 
@@ -58,12 +67,7 @@ type issueResultStruct struct {
 	} `json:"issues"`
 }
 
-func getIssues(mw *mainWindow) issueResultStruct {
-	username := string(mw.usernameEdit.Buffer)
-	apiToken := string(mw.passwordEdit.Buffer)
-	fmt.Printf("Username: %s\n", username)
-	fmt.Printf("API Token: %s\n", apiToken)
-
+func getIssues(username, password string) issueResultStruct {
 	client := http.Client{
 		Timeout: time.Duration(time.Second * 10),
 	}
@@ -74,7 +78,7 @@ func getIssues(mw *mainWindow) issueResultStruct {
 		return issueResultStruct{}
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.SetBasicAuth(username, apiToken)
+	req.SetBasicAuth(username, password)
 	params := req.URL.Query()
 	params.Add("jql", "\"epic link\"=\"Automation Triggers POC\"")
 	req.URL.RawQuery = params.Encode()
@@ -116,19 +120,23 @@ func (mw *mainWindow) update(w *nucular.Window) {
 	}
 
 	w.Row(25).Dynamic(1)
-
 	// Username Input
 	w.Label("Username", "LC")
 	mw.usernameEdit.Edit(w)
+	mw.conf.Username = string(mw.usernameEdit.Buffer)
 
 	// Password Input
 	w.Label("API Token", "LC")
 	mw.passwordEdit.Edit(w)
+	mw.conf.Password = string(mw.passwordEdit.Buffer)
 
 	// Get Issues Button
 	if w.ButtonText("Get Issues") {
+		mw.conf.Write()
+
 		mw.resultEdit.Buffer = []rune("")
-		results := getIssues(mw)
+		results := getIssues(mw.conf.Username, mw.conf.Password)
+
 		for _, issue := range results.Issues {
 			mw.resultEdit.Buffer = append(
 				mw.resultEdit.Buffer,
