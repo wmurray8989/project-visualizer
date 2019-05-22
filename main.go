@@ -33,7 +33,7 @@ func createMainWindow() *mainWindow {
 	mw.passwordEdit.Flags = nucular.EditField
 	mw.passwordEdit.PasswordChar = '*'
 
-	mw.resultEdit.Flags = nucular.EditReadOnly | nucular.EditMultiline
+	mw.resultEdit.Flags = nucular.EditReadOnly | nucular.EditMultiline | nucular.EditSelectable
 
 	return &mw
 }
@@ -45,6 +45,7 @@ type issueResultStruct struct {
 	Issues     []struct {
 		ID     string `json:"id"`
 		Key    string `json:"key"`
+		Self   string `json:"self"`
 		Fields struct {
 			Status struct {
 				Name string `json:"name"`
@@ -57,7 +58,7 @@ type issueResultStruct struct {
 	} `json:"issues"`
 }
 
-func getIssues(mw *mainWindow) {
+func getIssues(mw *mainWindow) issueResultStruct {
 	username := string(mw.usernameEdit.Buffer)
 	apiToken := string(mw.passwordEdit.Buffer)
 	fmt.Printf("Username: %s\n", username)
@@ -70,7 +71,7 @@ func getIssues(mw *mainWindow) {
 	req, err := http.NewRequest("GET", "https://crosschx.atlassian.net/rest/api/3/search", nil)
 	if err != nil {
 		log.Print(err)
-		return
+		return issueResultStruct{}
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.SetBasicAuth(username, apiToken)
@@ -83,14 +84,14 @@ func getIssues(mw *mainWindow) {
 	resp, err := client.Do(req)
 	if err != nil {
 		fmt.Println(err)
-		return
+		return issueResultStruct{}
 	}
 
 	defer resp.Body.Close()
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		fmt.Println(err)
-		return
+		return issueResultStruct{}
 	}
 
 	var results = issueResultStruct{}
@@ -98,9 +99,7 @@ func getIssues(mw *mainWindow) {
 
 	fmt.Printf("Results: %+v\n", results)
 
-	// fmt.Println(string(body))
-	// json.Unmarshal(body, issueStruct)
-
+	return results
 }
 
 func (mw *mainWindow) update(w *nucular.Window) {
@@ -128,7 +127,18 @@ func (mw *mainWindow) update(w *nucular.Window) {
 
 	// Get Issues Button
 	if w.ButtonText("Get Issues") {
-		getIssues(mw)
+		mw.resultEdit.Buffer = []rune("")
+		results := getIssues(mw)
+		for _, issue := range results.Issues {
+			mw.resultEdit.Buffer = append(
+				mw.resultEdit.Buffer,
+				[]rune(issue.Self)...,
+			)
+			mw.resultEdit.Buffer = append(
+				mw.resultEdit.Buffer,
+				'\n',
+			)
+		}
 	}
 
 	// Results Display
